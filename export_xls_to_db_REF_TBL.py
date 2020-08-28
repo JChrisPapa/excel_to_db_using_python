@@ -29,7 +29,7 @@ def load_location_mapping():
     wb = openpyxl.load_workbook( 'XXXXXXX.xlsx', data_only=True)
 
     cur_date = datetime.datetime.now()
-    print( '>>> 2. Open an excel sheet(SSSSSSS - ' + cur_date.strftime( '%Y/%m/%d %H:%M:%S' ) )
+    print( '>>> 2. Open an excel sheet(SSSSSSS) - ' + cur_date.strftime( '%Y/%m/%d %H:%M:%S' ) )
     ref_map_sheet = wb['SSSSSSS']
 
     # get max clumns and rows
@@ -55,31 +55,34 @@ def load_location_mapping():
     for j in range( 2, ref_map_max_row+1):
 
         # array for data : No. of columns - 4
-        ref_map_rec = [0 for x in range(4)]
+        ref_map_rec = [0 for x in range(5)]
 
         for i in range(0,4):
             ref_map_rec[i] = ref_map_sheet.cell(row=j, column=i+1).value
 
-            # if there is no specific index, there is no more data
-            # Add the check logic because we cannot make sure that there is no blank record.
-            if ref_map_rec[0] == None:
-                print( '************************** case 1 The row number where blank record is ' + str(j))
+        # set the value for "Duplicate Key"
+        ref_map_rec[4] = ref_map_rec[3]
+        
+        # if there is no specific index, there is no more data
+        # Add the check logic because we cannot make sure that there is no blank record.
+        if ref_map_rec[0] == None:
+            print( '************************** case 1 The row number where blank record is ' + str(j))
+            exit_now = True
+        # Add the check logic because we cannot make sure that the cell type of the specific is string
+        elif str( type( ref_map_rec[0])) == '<class \'string\'>':
+            if len( ref_map_rec[0] < 1 ):
+                print( '************************** case 2 The row number where blank record is ' + str(j))
                 exit_now = True
-            # Add the check logic because we cannot make sure that the cell type of the specific is string
-            elif str( type( ref_map_rec[0])) == '<class \'string\'>':
-                if len( ref_map_rec[0] < 1 ):
-                    print( '************************** case 2 The row number where blank record is ' + str(j))
-                    exit_now = True
-            # Add the check logic because we cannot make sure that the cell type of the specific is number
-            else:
-                tmp_str = str( ref_map_rec[0] )
-                if tmp_str == None or len( tmp_str ) < 1:
-                    print( '************************** case 3 The row number where blank record is ' + str(j))
-                    exit_now = True
-            
-            if exit_now:
-                print( '************************** exit_now: ' + str(exit_now) )
-                break
+        # Add the check logic because we cannot make sure that the cell type of the specific is number
+        else:
+            tmp_str = str( ref_map_rec[0] )
+            if tmp_str == None or len( tmp_str ) < 1:
+                print( '************************** case 3 The row number where blank record is ' + str(j))
+                exit_now = True
+        
+        if exit_now:
+            print( '************************** exit_now: ' + str(exit_now) )
+            break
 
         try:
             # Get a cursor
@@ -88,9 +91,10 @@ def load_location_mapping():
                                 COL_NM1, 
                                 COL_NM2, 
                                 COL_NM3, 
-                                COL_NM4, 
-                                COL_NM5 )
-                              VALUES ( %s, %s, %s, %s, %s ) """
+                                COL_NM4 )
+                              VALUES ( %s, %s, %s, %s )
+                        ON DUPLICATE KEY UPDATE
+                        COL_NM1 = %s """
             cursor.execute( query, ref_map_rec) 
         except Exception as e:
             exist_error = True
@@ -99,12 +103,65 @@ def load_location_mapping():
             print( e.message)
             break
 
-    print( '>>>> 5. Finish to insert new data in the TALBE_NM1 table')
+    cur_date = datetime.datetime.now()
+    print( '>>>> 5. Finish to insert new data in the TALBE_NM1 table'  + cur_date.strftime( '%Y/%m/%d %H:%M:%S' ))
     # for statement end ==============================
 
+# function to clease the data in TABLE_NM1
+def clenansing_data_TABLE_NM1():
+    global exit_now
+
+    cur_date = datetime.datetime.now()
+    print('>>>> 1. Cleansing data in TABLE_NM1 table'  + cur_date.strftime( '%Y/%m/%d %H:%M:%S' ))
+
+    cur_date = datetime.datetime.now()
+
+    try:
+        # get a cursor
+        cursor = dbconn.cursor()
+        query = "SELECT COL0, COL1, COL2, COL3 FROM TABLE_NM5"
+        cursor.execute(query)
+        result = cursor.fetchall()
+        ind = 0
+        
+        for rec in result:
+            ind = ind + 1
+            cursor = dbconn.cursor()
+
+            if rec[3] == NONE:
+                print( '*************** The row number where None occurs:' + str(ind) )
+                if rec[1] == 'AAAA':
+                    query1 = "UPDATE TABLE_NM1 SET COL_NM4 = '' WHERE COL_NM1 = '" + rec[0] + "' AND COL_NM2 = '" + rec[2] + "'"
+                elif rec[1] = 'BBBB':
+                    query1 = "UPDATE TABLE_NM1 SET COL_NM4 = '' WHERE COL_NM1 = '" + rec[0] + "' AND COL_NM2 = '" + rec[2] + "' AND COL_NM4 = 'CCCC'"
+            # replace "\n" with "%"
+            elif "\n" in rec[2]:
+                print( '!!!!!!!!!!!!!!!! The row number where \'\\n\' occurs: ' + str(ind))
+                tmp_str = rec[2]
+                if rec[1] == 'AAAA':
+                    query1 = "UPDATE TABLE_NM1 SET COL_NM4 = '" + rec[3] + "' WHERE COL_NM1 = '" + rec[0] + "' AND COL_NM2 = '" + tmp_str.replace( "\n", "%" ) + "'"
+                elif rec[1] = 'BBBB':
+                    query1 = "UPDATE TABLE_NM1 SET COL_NM4 = '" + rec[3] + "' WHERE COL_NM1 = '" + rec[0] +  "' AND COL_NM2 = '" + tmp_str.replace( "\n", "%" ) + "' AND COL_NM4 = 'CCCC'"
+            else:
+                if rec[1] == 'AAAA':
+                    query1 = "UPDATE TABLE_NM1 SET COL_NM4 = '" + rec[3] + "' WHERE COL_NM1 = '" + rec[0] + "' AND COL_NM2 = '" + rec[2] + "'"
+                elif rec[1] = 'BBBB':
+                    query1 = "UPDATE TABLE_NM1 SET COL_NM4 = '" + rec[3] + "' WHERE COL_NM1 = '" + rec[0] +  "' AND COL_NM2 = '" + rec[2] + "' AND COL_NM4 = 'CCCC'"
+            
+            print( "*****************" + str(ind) + " - " + query1)
+            cursor.execute(query1)
+
+        cur_date = datetime.datetime.now()
+        print('>>>> 2. Finish Cleansing data in TABLE_NM1 table'  + cur_date.strftime( '%Y/%m/%d %H:%M:%S' ))
+    except Exception as e:
+        exist_error = True
+        dbconn.rollback()
+        print(e.message)
+        exit()
+#================================================================
 print ( 'Select the Number(1-2)')
-print ( '1. TABLE_NM1')
-print ( '2. TABLE_NM2')
+print ( '1. Insert data into TABLE_NM1')
+print ( '2. Cleanse data in TABLE_NM1')
 
 sel_input = int( input() )
 
@@ -118,6 +175,3 @@ else:
 
 if exist_error == False:
     dbconn.commit()
-       
-                
-
